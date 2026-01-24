@@ -9,8 +9,9 @@
 /* Header from vtrutil library */
 #include "vtr_strong_id.h"
 
-/* Header from archfpga library */
+/* Headers from archfpga library */
 #include "physical_types.h"
+#include "rr_graph_fwd.h"
 
 /* Header from openfpgautil library */
 #include "arch_direct.h"

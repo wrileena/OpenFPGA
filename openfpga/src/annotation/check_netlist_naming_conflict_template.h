@@ -8,7 +8,9 @@
 #include "command.h"
 #include "command_context.h"
 #include "command_exit_codes.h"
+#include "globals.h"
 #include "vtr_time.h"
+#include "vpr_context.h"
 
 /********************************************************************
  * Function declaration

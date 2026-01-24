@@ -19,6 +19,8 @@
 #include "rr_gsb.h"
 #include "write_xml_unique_blocks.h"
 #include "write_xml_utils.h"
+#include "globals.h"
+#include "vpr_context.h"
 
 /********************************************************************
  * This file includes the top-level functions of this library

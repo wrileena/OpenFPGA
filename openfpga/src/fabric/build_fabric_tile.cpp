@@ -17,6 +17,8 @@
 #include "build_fabric_tile.h"
 #include "openfpga_naming.h"
 #include "openfpga_reserved_words.h"
+#include "physical_types_util.h"
+#include "vpr_utils.h"
 
 /* begin namespace openfpga */
 namespace openfpga {
