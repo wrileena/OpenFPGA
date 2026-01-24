@@ -77,7 +77,7 @@ parser = argparse.ArgumentParser(formatter_class=formatter)
 parser.add_argument("arch_file", type=str)
 parser.add_argument("benchmark_files", type=str, nargs="+")
 # parser.add_argument('extraArgs', nargs=argparse.REMAINDER)
-parser.add_argument("otherthings", nargs="*")
+# parser.add_argument("otherthings", nargs="*")
 
 # Optional arguments
 parser.add_argument("--top_module", type=str, default="top")
@@ -1017,7 +1017,12 @@ def run_command(taskname, logfile, command, exit_if_fail=True):
         try:
             output.write(" ".join(command) + "\n")
             process = subprocess.run(
-                command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                universal_newlines=True,
+                encoding="utf-8",
+                errors="replace",
             )
             output.write(process.stdout)
             output.write(process.stderr)
