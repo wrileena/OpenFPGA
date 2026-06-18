@@ -20,6 +20,9 @@
 #include "physical_types_util.h"
 #include "vpr_utils.h"
 
+#define VTR_ENABLE_DEBUG_LOGGING 
+
+
 /* begin namespace openfpga */
 namespace openfpga {
 
@@ -350,6 +353,14 @@ int build_fabric_tile(FabricTile& fabric_tile, const TileConfig& tile_config,
   PointWithLayer max_grid_coord;
   max_grid_coord.coordinates = vtr::Point<size_t>(grids.width(), grids.height());
   max_grid_coord.layer = grids.get_num_layers();
+
+  //Print the max_grid_coord 
+
+  VTR_LOG("Max grid coordinate RAKSHUNA BUILD FABRIC TILE: layer=%lu, x=%lu, y=%lu\n",
+          max_grid_coord.layer, max_grid_coord.coordinates.x(), max_grid_coord.coordinates.y());  
+
+  
+
   fabric_tile.init(max_grid_coord);
 
   for (size_t layer = 0; layer < (size_t) grids.get_num_layers(); ++layer) {  

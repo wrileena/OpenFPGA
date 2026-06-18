@@ -8,6 +8,9 @@
 #include "vtr_assert.h"
 #include "vtr_log.h"
 
+#define VTR_ENABLE_DEBUG_LOGGING 
+
+
 /* namespace openfpga begins */
 namespace openfpga {
 
@@ -77,22 +80,59 @@ FabricTileId FabricTile::unique_tile(const PointWithLayer& coord) const {
 }
 
 FabricTileId FabricTile::find_tile(const PointWithLayer& coord) const {
-  if (coord.layer >= tile_coord2id_lookup_.size()) {
-    VTR_LOG_ERROR(
+
+  //print error message when the coordinate is out of range
+  VTR_LOG("Inside find tile function\n");
+
+  VTR_LOG("=== PRINTING tile_coord2id_lookup_ ===\n");
+
+for (size_t layer = 0; layer < tile_coord2id_lookup_.size(); ++layer) {
+
+    VTR_LOG("Layer %zu\n", layer);
+
+    for (size_t x = 0; x < tile_coord2id_lookup_[layer].size(); ++x) {
+
+        VTR_LOG("  X = %zu, Y-size = %zu\n",
+                 x,
+                 tile_coord2id_lookup_[layer][x].size());
+
+        for (size_t y = 0;
+             y < tile_coord2id_lookup_[layer][x].size();
+             ++y) {
+
+            FabricTileId id =
+                tile_coord2id_lookup_[layer][x][y];
+
+            VTR_LOG("    [%zu][%zu][%zu] = %lu\n",
+                     layer,
+                     x,
+                     y,
+                     size_t(id));
+        }
+    }
+}
+
+
+  if (tile_coord2id_lookup_.empty()) {
+    VTR_LOG("Babua, tile is empty\n");
+  }
+
+    if (coord.layer >= tile_coord2id_lookup_.size()) {
+    VTR_LOG(
       "Tile coordinate [%lu][%lu][%lu] exceeds the maximum range [%lu][%lu][%lu]!\n", coord.layer,
       coord.coordinates.x(), coord.coordinates.y(), tile_coord2id_lookup_.size(),
       tile_coord2id_lookup_[0].size(), tile_coord2id_lookup_[0][0].size());
     return FabricTileId::INVALID();
   }
   if (coord.coordinates.x() >= tile_coord2id_lookup_[coord.layer].size()) {
-    VTR_LOG_ERROR(
+    VTR_LOG(
       "Tile coordinate [%lu][%lu][%lu] exceeds the maximum range [%lu][%lu][%lu]!\n", coord.layer,
       coord.coordinates.x(), coord.coordinates.y(), tile_coord2id_lookup_.size(),
       tile_coord2id_lookup_[0].size(), tile_coord2id_lookup_[0][0].size());
     return FabricTileId::INVALID();
   }
   if (coord.coordinates.y() >= tile_coord2id_lookup_[coord.layer][coord.coordinates.x()].size()) {
-    VTR_LOG_ERROR(
+    VTR_LOG(
       "Tile coordinate [%lu][%lu][%lu] exceeds the maximum range [%lu][%lu][%lu]!\n", coord.layer,
       coord.coordinates.x(), coord.coordinates.y(), tile_coord2id_lookup_.size(),
       tile_coord2id_lookup_[0].size(), tile_coord2id_lookup_[0][0].size());
@@ -382,6 +422,14 @@ FabricTileId FabricTile::create_tile(const PointWithLayer& coord) {
 }
 
 void FabricTile::init(const PointWithLayer& max_coord) {
+
+  //print the max_coord for debugging
+  VTR_LOG("Initializing FabricTile with max_coord: layer=%lu, x=%lu, y=%lu\n",
+          max_coord.layer, max_coord.coordinates.x(), max_coord.coordinates.y());
+
+  //It's not entering the function at all 
+
+
   tile_coord2id_lookup_.resize(max_coord.layer);
   pb_coord2id_lookup_.resize(max_coord.layer);
   cbx_coord2id_lookup_.resize(max_coord.layer);

@@ -95,19 +95,28 @@ static size_t add_top_module_grid_instance(
  *******************************************************************/
 static vtr::NdMatrix<size_t, 3> add_top_module_grid_instances(
   ModuleManager& module_manager, const ModuleId& top_module,
-  const DeviceGrid& grids) {
+  const DeviceGrid& grids, const size_t& layer)
+  //Added the layer argument 
+  
+  {
   vtr::ScopedStartFinishTimer timer("Add grid instances to top module");
 
   /* Reserve an array for the instance ids */
+  // vtr::NdMatrix<size_t, 3> grid_instance_ids({(size_t)grids.get_num_layers(), grids.width(), grids.height()});
+
   vtr::NdMatrix<size_t, 3> grid_instance_ids({(size_t)grids.get_num_layers(), grids.width(), grids.height()});
-  grid_instance_ids.fill(size_t(-1));
+
+  grid_instance_ids.fill(size_t(-1)); //filling the Ndmatrix with -1 initially
+
 
   /* Instanciate I/O grids */
   /* Create the coordinate range for each side of FPGA fabric */
   std::map<e_side, std::vector<vtr::Point<size_t>>> io_coordinates =
     generate_perimeter_grid_coordinates(grids);
 
-  for (size_t ilayer = 0; ilayer < (size_t)grids.get_num_layers(); ++ilayer) {
+  // for (size_t ilayer = 0; ilayer < (size_t)grids.get_num_layers(); ++ilayer) {
+    size_t ilayer =layer; 
+  
     for (const e_side& io_side : FPGA_SIDES_CLOCKWISE) {
       for (const vtr::Point<size_t>& io_coordinate : io_coordinates[io_side]) {
         t_physical_tile_loc phy_tile_loc(io_coordinate.x(), io_coordinate.y(),
@@ -177,9 +186,17 @@ static vtr::NdMatrix<size_t, 3> add_top_module_grid_instances(
           module_manager, top_module, phy_tile_type, NUM_2D_SIDES, grid_coord, ilayer);
       }
     }
-  }
-
+  // }
+//Print the grid instance ids for debugging
+  for (size_t ilayer = 0; ilayer < (size_t)grids.get_num_layers(); ++ilayer) {
+    for (size_t ix = 0; ix < grids.width(); ++ix) {
+      for (size_t iy = 0; iy < grids.height(); ++iy) {
+        VTR_LOG("Grid instance bujangu at layer %lu, x %lu, y %lu: %lu\n", ilayer, ix, iy, grid_instance_ids[ilayer][ix][iy]);
+      }
+    }
+  } 
   return grid_instance_ids;
+  
 }
 
 /********************************************************************
@@ -466,14 +483,22 @@ int build_top_module_fine_grained_child_instances(
   const bool& frame_view, const bool& compact_routing_hierarchy,
   const bool& duplicate_grid_pin, const FabricKey& fabric_key,
   const bool& group_config_block, const bool& perimeter_cb,
-  const bool& verbose) {
+  const bool& verbose,
+  const size_t& layer)
+
+  //added layer argument for layer-wise implementation 
+
+  {
   int status = CMD_EXEC_SUCCESS;
   std::map<t_rr_type, vtr::NdMatrix<size_t, 3>> cb_instance_ids;
+
+//PRINT TOP MODULE NAME AND LAYER NUMBER FOR DEBUGGING
+  VTR_LOG("Building top module '%s' for layer %lu\n", module_manager.module_name(top_module).c_str(), layer); 
 
   /* Add sub modules, which are grid, SB and CBX/CBY modules as instances */
   /* Add all the grids across the fabric */
   vtr::NdMatrix<size_t, 3> grid_instance_ids =
-    add_top_module_grid_instances(module_manager, top_module, grids);
+    add_top_module_grid_instances(module_manager, top_module, grids, layer);
   /* Add all the SBs across the fabric */
   vtr::NdMatrix<size_t, 3> sb_instance_ids = add_top_module_switch_block_instances(
     module_manager, top_module, rr_graph, device_rr_gsb,

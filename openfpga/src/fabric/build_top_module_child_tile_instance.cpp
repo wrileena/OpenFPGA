@@ -32,8 +32,11 @@
 #include "openfpga_rr_graph_utils.h"
 #include "rr_gsb_utils.h"
 
+
+#define VTR_ENABLE_DEBUG_LOGGING 
 /* begin namespace openfpga */
 namespace openfpga {
+
 
 /********************************************************************
  * Add a instance of a tile module to the top module
@@ -47,20 +50,25 @@ static size_t add_top_module_tile_instance(ModuleManager& module_manager,
     fabric_tile.unique_tile_coordinate(fabric_tile_id);
 
   std::string tile_module_name = generate_tile_module_name(unique_tile_coord_point.coordinates, unique_tile_coord_point.layer);
+
   ModuleId tile_module = module_manager.find_module(tile_module_name);
+  
   VTR_ASSERT(true == module_manager.valid_module_id(tile_module));
   /* Record the instance id */
   size_t tile_instance = module_manager.num_instance(top_module, tile_module);
   /* Add the module to top_module */
   module_manager.add_child_module(top_module, tile_module, false);
   /* Set an unique name to the instance
-   * Note: it is your risk to gurantee the name is unique!
+   * Note: it is your risk to guarantee the name is unique!
    */
   PointWithLayer tile_coord_point = fabric_tile.tile_coordinate(fabric_tile_id);
   std::string instance_name = generate_tile_module_name(tile_coord_point.coordinates, tile_coord_point.layer);
   module_manager.set_child_instance_name(top_module, tile_module, tile_instance,
                                          instance_name);
+//print the instance name for debug
+  VTR_LOG("WRIL Adding instance %s to top module\n", instance_name.c_str());
   return tile_instance;
+  
 }
 
 /********************************************************************
@@ -97,28 +105,53 @@ static int add_top_module_tile_instances(ModuleManager& module_manager,
                                          vtr::NdMatrix<size_t, 3>& tile_instance_ids,
                                          const DeviceGrid& grids,
                                          const FabricTile& fabric_tile,
-                                         const size_t& layer) {
+                                         const size_t& layer) { 
   vtr::ScopedStartFinishTimer timer("Add tile instances to top module");
   int status = CMD_EXEC_SUCCESS;
 
   /* Reserve an array for the instance ids */
   tile_instance_ids.resize({(size_t)grids.get_num_layers(), grids.width(), grids.height()}, -1);
 
+    VTR_LOG("RAKSHI Adding AFTER  instances to top module ",  tile_instance_ids);
+
   /* Instanciate I/O grids */
   /* Create the coordinate range for each side of FPGA fabric */
   std::map<e_side, std::vector<vtr::Point<size_t>>> io_coordinates =
     generate_perimeter_tile_coordinates(grids);
 
+    for (const auto& side_entry : io_coordinates) {
+  e_side side = side_entry.first;
+  const std::vector<vtr::Point<size_t>>& points = side_entry.second;
+
+  VTR_LOG("Side = %d\n", side);
+
+  for (const auto& point : points) {
+    VTR_LOG("  Point: (%zu, %zu)\n", point.x(), point.y());
+  }
+}
   for (const e_side& io_side : FPGA_SIDES_CLOCKWISE) {
+
+    VTR_LOG("Vector size = %zu\n",
+            io_coordinates[io_side].size());
     for (const vtr::Point<size_t>& io_coord : io_coordinates[io_side]) {
       PointWithLayer io_coord_with_layer;
       io_coord_with_layer.coordinates = io_coord;
       io_coord_with_layer.layer = layer;
+
+      VTR_LOG("PRINT KARO Processing I/O tile at coordinate (%zu, %zu) on layer %zu\n", io_coord_with_layer.coordinates.x(), io_coord_with_layer.coordinates.y(), io_coord_with_layer.layer);
+
+      //error error oh the terror!
       FabricTileId fabric_tile_id = fabric_tile.find_tile(io_coord_with_layer);
       if (!fabric_tile.valid_tile_id(fabric_tile_id)) {
+
+         //print the tile module name
+      VTR_LOG("WRIL Tile not valid\n");    
+ 
         continue;
       }
       /* Add a tile module to top_module*/
+      VTR_LOG("WRIL Tile IS valid\n");  
+
       tile_instance_ids[layer][io_coord.x()][io_coord.y()] =
         add_top_module_tile_instance(module_manager, top_module, fabric_tile,
                                      fabric_tile_id);
@@ -1972,11 +2005,16 @@ int build_top_module_tile_child_instances(
   const bool& group_config_block, const bool& name_module_using_index,
   const bool& perimeter_cb, const bool& frame_view, const bool& verbose) {
   int status = CMD_EXEC_SUCCESS;
+
+  VTR_LOG("Add tile instances to top module and build connections...\n");
+
   vtr::NdMatrix<size_t, 3> tile_instance_ids; // 3D matrix [layer][x][y]
   status = add_top_module_tile_instances(module_manager, top_module,
                                          tile_instance_ids, grids, fabric_tile, layer);
   if (status != CMD_EXEC_SUCCESS) {
     return CMD_EXEC_FATAL_ERROR;
+    //Print the status into the 
+    VTR_LOG("NOT ADDED TILE INSTANCES BINGBONG\n");
   }
 
   /* Update the I/O children list */
