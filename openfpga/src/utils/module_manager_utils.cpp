@@ -2487,11 +2487,14 @@ ModuleNetId create_module_source_pin_net(ModuleManager& module_manager,
   ModuleNetId net = module_manager.module_instance_port_net(
     cur_module_id, src_module_id, src_instance_id, src_module_port_id,
     src_pin_id);
+ 
   if (ModuleNetId::INVALID() == net) {
     net = module_manager.create_module_net(cur_module_id);
+    
     module_manager.add_module_net_source(cur_module_id, net, src_module_id,
                                          src_instance_id, src_module_port_id,
                                          src_pin_id);
+
   }
 
   return net;

@@ -104,6 +104,9 @@ static void add_top_module_nets_connect_grids_and_sb(
 
   VTR_ASSERT(true == module_manager.valid_module_id(sink_sb_module));
 
+  //debugging information
+  VTR_LOG("Adding GSB module add_top_module_nets_connect_grids_and_sb %d at location (%d, %d)\n", module_gsb_layer, module_sb_coordinate.x(), module_sb_coordinate.y());    
+
   size_t sink_sb_instance =
     sb_instance_ids[layer][instance_sb_coordinate.x()][instance_sb_coordinate.y()];
 
@@ -114,12 +117,18 @@ static void add_top_module_nets_connect_grids_and_sb(
     
     if (side > 3) break; // OPINS are only connected on the 2D sides
     
+    //print opin_node information for debugging
+    VTR_LOG("print module_sb.get_num_opin_nodes(side_manager.get_side()) %d\n", module_sb.get_num_opin_nodes(side_manager.get_side()));  
     for (size_t inode = 0;
          inode < module_sb.get_num_opin_nodes(side_manager.get_side());
          ++inode) {
+
+      
       /* Collect source-related information */
       /* Generate the grid module name by considering if it locates on the
        * border */
+
+       //debugging information
       RRNodeId gridNode = rr_gsb.get_opin_node(side_manager.get_side(), inode);
       vtr::Point<size_t> grid_coordinate(
         rr_graph.node_xlow(gridNode),
@@ -134,6 +143,8 @@ static void add_top_module_nets_connect_grids_and_sb(
       ModuleId src_grid_module =
         module_manager.find_module(src_grid_module_name);
 
+      //Print the valid module id for debugging
+      VTR_LOG("Checking the module id for %s: %d\n", src_grid_module_name.c_str(), module_manager.valid_module_id(src_grid_module));
       VTR_ASSERT(true == module_manager.valid_module_id(src_grid_module));
 
       // Got the sb module and the grid module
@@ -142,6 +153,7 @@ static void add_top_module_nets_connect_grids_and_sb(
         grid_instance_ids[grid_layer][grid_coordinate.x()][grid_coordinate.y()];
       size_t src_grid_pin_index = rr_graph.node_pin_num(gridNode);
 
+    
       t_physical_tile_type_ptr grid_type_descriptor = grids.get_physical_type(
         t_physical_tile_loc(grid_coordinate.x(), grid_coordinate.y(), grid_layer));
 
@@ -153,10 +165,18 @@ static void add_top_module_nets_connect_grids_and_sb(
       BasicPort src_grid_pin_info =
         vpr_device_annotation.physical_tile_pin_port_info(grid_type_descriptor,
                                                           src_grid_pin_index);
+
+      //Print and check the validity of the src_grid_pin_info for debugging
+      VTR_LOG("1. Checking the validity of the src_grid_pin_info for  %s: %d\n", src_grid_pin_info.get_name().c_str(), src_grid_pin_info.is_valid()); 
+
       VTR_ASSERT(true == src_grid_pin_info.is_valid());
 
       int subtile_index = vpr_device_annotation.physical_tile_pin_subtile_index(
         grid_type_descriptor, src_grid_pin_index);
+
+
+      //Print and check the validity of the subtile_index for debugging add grid tile and capacity as well
+      VTR_LOG("2. Checking the validity of the subtile_index for %s: %d, grid_type_descriptor->capacity: %d\n", src_grid_pin_info.get_name().c_str(), subtile_index, grid_type_descriptor->capacity);    
 
       VTR_ASSERT(OPEN != subtile_index &&
                  subtile_index < grid_type_descriptor->capacity);
@@ -168,6 +188,9 @@ static void add_top_module_nets_connect_grids_and_sb(
 
       ModulePortId src_grid_port_id =
         module_manager.find_module_port(src_grid_module, src_grid_port_name);
+      
+      //Print and check the validity of the src_grid_port_id for debugging
+      VTR_LOG("3. Checking the validity of the src_grid_port_id for %s: %d\n", src_grid_port_name.c_str(), module_manager.valid_module_port_id(src_grid_module, src_grid_port_id));    
 
       VTR_ASSERT(true == module_manager.valid_module_port_id(src_grid_module,
                                                              src_grid_port_id));
@@ -186,26 +209,82 @@ static void add_top_module_nets_connect_grids_and_sb(
       ModulePortId sink_sb_port_id =
         module_manager.find_module_port(sink_sb_module, sink_sb_port_name);
 
+      //Print and check the validity of the sink_sb_port_id for debugging
+      VTR_LOG("4. Checking the validity of the sink_sb_port_id for %s: %d\n", sink_sb_port_name.c_str(), module_manager.valid_module_port_id(sink_sb_module, sink_sb_port_id));      
+      //create a temp variable to store the layer argument 
+      std::string temp_layer = "layer_"+std::to_string(layer);
+
+
+      if (sink_sb_port_name.find(temp_layer) == std::string::npos) {
+        VTR_LOG("Warning: sink_sb_port_name %s does not contain the layer argument %s\n", sink_sb_port_name.c_str(), temp_layer.c_str());
+        continue; //skip this port if it does not contain the layer argument
+      }
+      else {
+        VTR_LOG("sink_sb_port_name %s contains the layer argument %s\n", sink_sb_port_name.c_str(), temp_layer.c_str());
+      }
+
+      
+      //break the loop if "layer_layer_argument" is not present in the "sink_sb_port_name" string
+      if (sink_sb_port_id == ModulePortId::INVALID()) {
+        VTR_LOG("Warning: sink_sb_port_id is invalid for %s\n", sink_sb_port_name.c_str());
+        continue;
+      }   
+
+
       VTR_ASSERT(true == module_manager.valid_module_port_id(sink_sb_module,
                                                              sink_sb_port_id));
       BasicPort sink_sb_port =
         module_manager.module_port(sink_sb_module, sink_sb_port_id);
 
+
+      // Print if sink and source ports are matching 
+      VTR_LOG("5. Checking the matching of the source and sink ports: %s (width: %d) and %s (width: %d)\n", src_grid_port.get_name().c_str(), src_grid_port.get_width(), sink_sb_port.get_name().c_str(), sink_sb_port.get_width());  
       /* Source and sink port should match in size */
       VTR_ASSERT(src_grid_port.get_width() == sink_sb_port.get_width());
 
+      VTR_LOG("6. Creating nets for each pin\n");
+
+      //Debug the src_grid_port.pins() and sink_sb_port.pins() for debugging
+      VTR_LOG("src_grid_port.pins(): ");
+      for (size_t i = 0; i < src_grid_port.pins().size(); ++i) {
+        VTR_LOG("%lu ", src_grid_port.pins()[i]);
+      }   
+      VTR_LOG("sink_sb_port.pins(): ");
+      for (size_t i = 0; i < sink_sb_port.pins().size(); ++i) {
+        VTR_LOG("%lu ", sink_sb_port.pins()[i]);
+      }       
+
       /* Create a net for each pin */
       for (size_t pin_id = 0; pin_id < src_grid_port.pins().size(); ++pin_id) {
+
+        //print 
+        VTR_LOG("Entering create_module_source_pin_net\n"); 
         ModuleNetId net = create_module_source_pin_net(
           module_manager, top_module, src_grid_module, src_grid_instance,
           src_grid_port_id, src_grid_port.pins()[pin_id]);
 
+        //print the net id for debugging
+        VTR_LOG(" ##Created net with ModuleNetId:##%d\n", net);
+
+        //Check the src and sink ports for debugging
+        VTR_LOG("7. Creating net for source port %s (pin: %lu) and sink port %s (pin: %lu)\n", src_grid_port.get_name().c_str(), src_grid_port.pins()[pin_id], sink_sb_port.get_name().c_str(), sink_sb_port.pins()[pin_id]);           
+
         /* Configure the net sink */
-        module_manager.add_module_net_sink(top_module, net, sink_sb_module,
+      
+        ModuleNetSinkId sinkport =module_manager.add_module_net_sink(top_module, net, sink_sb_module,
                                            sink_sb_instance, sink_sb_port_id,
                                            sink_sb_port.pins()[pin_id]);
+
+                                           //debugging information
+
+      //Print the  ModuleNetSinkId sinkport variable for debugging
+      VTR_LOG("8. Created net sink with ModuleNetSinkId: %d\n", sinkport);
+      
+    
       }
     }
+            VTR_LOG("Adding net for layer %d at location (%d, %d)\n", module_gsb_layer, module_sb_coordinate.x(), module_sb_coordinate.y());      
+
   }
 }
 
@@ -984,30 +1063,45 @@ void add_top_module_nets_connect_grids_and_gsbs(
   const RRGraphView& rr_graph, const DeviceRRGSB& device_rr_gsb,
   const vtr::NdMatrix<size_t, 3>& sb_instance_ids,
   const std::map<t_rr_type, vtr::NdMatrix<size_t, 3>>& cb_instance_ids,
-  const bool& compact_routing_hierarchy, const bool& duplicate_grid_pin) {
+  const bool& compact_routing_hierarchy, const bool& duplicate_grid_pin, const size_t& layer) {
   vtr::ScopedStartFinishTimer timer("Add module nets between grids and GSBs");
+
+  //add debugging information 
+  VTR_LOG("Entering GSB module nets between grids and GSBs for layer %d\n", layer);
 
   vtr::Point<size_t> gsb_range = device_rr_gsb.get_gsb_range();
   size_t num_layers = device_rr_gsb.get_gsb_layers();
 
-  for (size_t ilayer = 0; ilayer < num_layers; ++ilayer){
+  size_t ilayer= layer;
+  
+  // for (size_t ilayer = 0; ilayer < num_layers; ++ilayer){
     for (size_t ix = 0; ix < gsb_range.x(); ++ix) {
       for (size_t iy = 0; iy < gsb_range.y(); ++iy) {
         vtr::Point<size_t> gsb_coordinate(ix, iy);
         const RRGSB& rr_gsb = device_rr_gsb.get_gsb(ix, iy, ilayer);
 
+        //debugging information
+        VTR_LOG("Adding GSB module nets for ADD TOP_MODULE_NETS_CONNECT_GRIDS_AND_GSBS %d at location (%d, %d)\n", ilayer, ix, iy);    
+        
+
         /* Connect the grid pins of the GSB to adjacent grids */
         if (false == duplicate_grid_pin) {
           add_top_module_nets_connect_grids_and_sb(
-            module_manager, top_module, vpr_device_annotation, grids, ilayer,
+            module_manager, top_module, vpr_device_annotation, grids, layer,
             grid_instance_ids, rr_graph, device_rr_gsb, rr_gsb, sb_instance_ids,
             compact_routing_hierarchy);
+
+            // add debugging information
+            VTR_LOG("Adding grid to sb connections for layer %d at location (%d, %d)\n", ilayer, ix, iy);   
         } else {
           VTR_ASSERT_SAFE(true == duplicate_grid_pin);
           add_top_module_nets_connect_grids_and_sb_with_duplicated_pins(
             module_manager, top_module, vpr_device_annotation, grids, ilayer,
             grid_instance_ids, rr_graph, device_rr_gsb, rr_gsb, sb_instance_ids,
             compact_routing_hierarchy);
+
+          // add debugging information
+          VTR_LOG("Adding grid to sb connections with duplicated pins for layer %d at location (%d, %d)\n", ilayer, ix, iy);    
         }
 
         add_top_module_nets_connect_grids_and_cb(
@@ -1015,35 +1109,55 @@ void add_top_module_nets_connect_grids_and_gsbs(
           grid_instance_ids, rr_graph, device_rr_gsb, rr_gsb, CHANX,
           cb_instance_ids.at(CHANX), compact_routing_hierarchy);
 
+          //add debugging information
+          VTR_LOG("Adding grid to cb connections for layer %d at location (%d, %d)\n", ilayer, ix, iy); 
+
         add_top_module_nets_connect_grids_and_cb(
           module_manager, top_module, vpr_device_annotation, grids, ilayer,
           grid_instance_ids, rr_graph, device_rr_gsb, rr_gsb, CHANY,
           cb_instance_ids.at(CHANY), compact_routing_hierarchy);
+          //add debugging information
+          VTR_LOG("Adding grid to cb connections for layer %d at location (%d, %d)\n", ilayer, ix, iy);   
 
         add_top_module_nets_connect_sb_and_cb(
           module_manager, top_module, rr_graph, device_rr_gsb, rr_gsb,
           sb_instance_ids, cb_instance_ids, compact_routing_hierarchy, ilayer);
 
+          
+
         // This has to be varied to change it to imterlayer connections between MODULES 
 
-        if (num_layers > 1){
+        // if (num_layers > 1){
 
-          VTR_LOG("Adding interlayer connections for layer %d at location (%d, %d)\n", ilayer, ix, iy);
+        //   VTR_LOG("Adding interlayer connections for layer %d at location (%d, %d)\n", ilayer, ix, iy);
 
-          add_top_module_nets_connect_sb_and_sb(module_manager, top_module, rr_graph, device_rr_gsb, rr_gsb,
-            sb_instance_ids, compact_routing_hierarchy, ilayer);
+        //   add_top_module_nets_connect_sb_and_sb(module_manager, top_module, rr_graph, device_rr_gsb, rr_gsb,
+        //     sb_instance_ids, compact_routing_hierarchy, ilayer);
 
-          // Connect CBs to CBs
-          add_top_module_nets_connect_cb_and_cb(module_manager, top_module, rr_graph, device_rr_gsb, rr_gsb,
-            cb_instance_ids.at(CHANX), compact_routing_hierarchy, ilayer, CHANX);
+        //     //add debugging information
+        //     VTR_LOG("Completed sb to sb connections for layer %d at location (%d, %d)\n", ilayer, ix, iy);    
+
+        //   // Connect CBs to CBs
+        //   add_top_module_nets_connect_cb_and_cb(module_manager, top_module, rr_graph, device_rr_gsb, rr_gsb,
+        //     cb_instance_ids.at(CHANX), compact_routing_hierarchy, ilayer, CHANX);
           
-          add_top_module_nets_connect_cb_and_cb(module_manager, top_module, rr_graph, device_rr_gsb, rr_gsb,
-            cb_instance_ids.at(CHANY), compact_routing_hierarchy, ilayer, CHANY);
+        //     //add debugging information
+        //     VTR_LOG("Completed cb to cb connections for layer %d at location (%d, %d)\n", ilayer, ix, iy);  
 
-        }
+        //   add_top_module_nets_connect_cb_and_cb(module_manager, top_module, rr_graph, device_rr_gsb, rr_gsb,
+        //     cb_instance_ids.at(CHANY), compact_routing_hierarchy, ilayer, CHANY);
+
+        //     //add debugging information
+        //     VTR_LOG("Completed cb to cb connections for layer %d at location (%d, %d)\n", ilayer, ix, iy);    
+
+        // }
       }
+      //check if layer connections have been made, add debugging information
+      VTR_LOG("Completed layer %d connections for GSBs at x=%d\n", ilayer, ix); 
     }
-  }
+  // }
+  //print statement to indicate completion of all GSB connections
+  VTR_LOG("Completed all GSB module nets between grids and GSBs for layer %d\n", layer);
 }
 
 /********************************************************************
@@ -1427,12 +1541,17 @@ int add_top_module_global_ports_from_grid_modules(
   const DeviceRRGSB& device_rr_gsb,
   const std::map<t_rr_type, vtr::NdMatrix<size_t, 3>>& cb_instance_ids,
   const vtr::NdMatrix<size_t, 3>& grid_instance_ids, const ClockNetwork& clk_ntwk,
-  const RRClockSpatialLookup& rr_clock_lookup, const bool& perimeter_cb) {
+  const RRClockSpatialLookup& rr_clock_lookup, const bool& perimeter_cb, const size_t& layer) {
   int status = CMD_EXEC_SUCCESS;
 
   /* Add the global ports which are NOT yet added to the top-level module
    * (in different names than the global ports defined in circuit library
    */
+
+   //add debugging information
+  VTR_LOG("Adding global ports from grid modules for layer %d\n", layer);
+
+
   std::vector<BasicPort> global_ports_to_add;
   for (const TileGlobalPortId& tile_global_port :
        tile_annotation.global_ports()) {
@@ -1468,12 +1587,24 @@ int add_top_module_global_ports_from_grid_modules(
                             ModuleManager::MODULE_GLOBAL_PORT);
   }
 
+  //add debugging information
+  VTR_LOG("Completed adding global ports from grid modules for layer %d\n", layer); 
   /* Add module nets */
   for (const TileGlobalPortId& tile_global_port :
        tile_annotation.global_ports()) {
     /* Must found one valid port! */
+
+    VTR_LOG("Top module port ID outisde the func: %zu\n", size_t(module_manager.find_module_port(
+      top_module, tile_annotation.global_port_name(tile_global_port))));
+
     ModulePortId top_module_port = module_manager.find_module_port(
       top_module, tile_annotation.global_port_name(tile_global_port));
+
+       //print what the function returns for debugging purposes
+      VTR_LOG("Top module port for tile global port\n");      
+      //print moduleport id top_module_port
+      
+
     VTR_ASSERT(ModulePortId::INVALID() != top_module_port);
 
     /* There are two cases when building the nets:
@@ -1482,6 +1613,9 @@ int add_top_module_global_ports_from_grid_modules(
      * - If the net will be directly wired to tiles, the net will drive an input
      * of a tile
      */
+    //Add debug statement 
+    VTR_LOG("Adding global net for tile global port %s\n", tile_annotation.global_port_name(tile_global_port).c_str()); 
+  
     if (tile_annotation.global_port_thru_dedicated_network(tile_global_port)) {
       status = build_top_module_global_net_from_clock_arch_tree(
         module_manager, top_module, top_module_port, rr_graph, device_rr_gsb,

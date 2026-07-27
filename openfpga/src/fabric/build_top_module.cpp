@@ -99,7 +99,7 @@ int build_top_module(
     module_manager.add_module(layer_module_name);
 
     //print the layer module name for debugging
-    VTR_LOG("Layer module kulut '%s' with id '%d' is added to the TOP manager.\n",
+    VTR_LOG("Layer module '%s' with id '%d' is added to the TOP manager.\n",
             module_manager.module_name(layer_module).c_str(), size_t(layer_module));  
 
     module_manager.add_child_module(top_module,layer_module,false);
@@ -225,10 +225,12 @@ int build_top_module(
 } /* end namespace openfpga */
 
 
-// /********************************************************************
-//  * This file includes functions that are used to print the top-level
-//  * module for the FPGA fabric in Verilog format
-//  *******************************************************************/
+
+// //ISMAEL'S VERSION
+// // /********************************************************************
+// //  * This file includes functions that are used to print the top-level
+// //  * module for the FPGA fabric in Verilog format
+// //  *******************************************************************/
 // #include <algorithm>
 // #include <map>
 
@@ -301,15 +303,15 @@ int build_top_module(
 //   module_manager.set_module_usage(top_module, ModuleManager::MODULE_TOP);
 
 //   // for (size_t layer = 0; layer < grids.get_num_layers(); ++layer) {
-//     // if (fabric_tile.empty()) {
-//     //   VTR_LOG("Add fine-grained instances to top module and build connections...\n");
-//     //   status = build_top_module_fine_grained_child_instances(
-//     //     module_manager, top_module, blwl_sr_banks, circuit_lib, clk_ntwk,
-//     //     rr_clock_lookup, vpr_device_annotation, grids, tile_annotation,
-//     //     rr_graph, device_rr_gsb, tile_direct, arch_direct, config_protocol,
-//     //     sram_model, frame_view, compact_routing_hierarchy, duplicate_grid_pin,
-//     //     fabric_key, group_config_block, perimeter_cb, verbose);
-//     // } else {
+//     if (fabric_tile.empty()) {
+//       VTR_LOG("Add fine-grained instances to top module and build connections...\n");
+//       status = build_top_module_fine_grained_child_instances(
+//         module_manager, top_module, blwl_sr_banks, circuit_lib, clk_ntwk,
+//         rr_clock_lookup, vpr_device_annotation, grids, tile_annotation,
+//         rr_graph, device_rr_gsb, tile_direct, arch_direct, config_protocol,
+//         sram_model, frame_view, compact_routing_hierarchy, duplicate_grid_pin,
+//         fabric_key, group_config_block, perimeter_cb, verbose);
+//     } else {
 //       VTR_LOG("Add tile instances to top module and build connections...\n");
 //       /* Build the tile instances under the top module */
 //       status = build_top_module_tile_child_instances(
@@ -319,7 +321,7 @@ int build_top_module(
 //         config_protocol, sram_model, fabric_key, group_config_block,
 //         name_module_using_index, perimeter_cb, frame_view, verbose);
 //     // }
-//   // }
+//   }
 
 //   if (status != CMD_EXEC_SUCCESS) {
 //     return CMD_EXEC_FATAL_ERROR;

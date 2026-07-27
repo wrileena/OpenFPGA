@@ -404,6 +404,6 @@ namespace openfpga {
             }
     
             // ASSUMPTION BEING MADE:
-            // 1. There are only 2 layers in the grid  
+            // 1. There are only 2 layers in the grid 
         }
 }

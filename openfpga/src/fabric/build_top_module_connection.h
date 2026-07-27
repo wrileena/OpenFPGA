@@ -32,7 +32,7 @@ void add_top_module_nets_connect_grids_and_gsbs(
   const RRGraphView& rr_graph, const DeviceRRGSB& device_rr_gsb,
   const vtr::NdMatrix<size_t, 3>& sb_instance_ids,
   const std::map<t_rr_type, vtr::NdMatrix<size_t, 3>>& cb_instance_ids,
-  const bool& compact_routing_hierarchy, const bool& duplicate_grid_pin);
+  const bool& compact_routing_hierarchy, const bool& duplicate_grid_pin, const size_t& layer);
 
 int add_top_module_global_ports_from_grid_modules(
   ModuleManager& module_manager, const ModuleId& top_module,
@@ -42,7 +42,7 @@ int add_top_module_global_ports_from_grid_modules(
   const DeviceRRGSB& device_rr_gsb,
   const std::map<t_rr_type, vtr::NdMatrix<size_t, 3>>& cb_instance_ids,
   const vtr::NdMatrix<size_t, 3>& grid_instance_ids, const ClockNetwork& clk_ntwk,
-  const RRClockSpatialLookup& rr_clock_lookup, const bool& perimeter_cb);
+  const RRClockSpatialLookup& rr_clock_lookup, const bool& perimeter_cb, const size_t& layer);
 
 void add_top_module_nets_prog_clock(ModuleManager& module_manager,
                                     const ModuleId& top_module,

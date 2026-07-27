@@ -11,6 +11,9 @@
 #include "vtr_assert.h"
 #include "vtr_log.h"
 
+#define VTR_ENABLE_DEBUG_LOGGING
+
+
 /* begin namespace openfpga */
 namespace openfpga {
 
@@ -338,10 +341,16 @@ ModulePortId ModuleManager::find_module_port(
   for (const auto& port : port_ids_[module_id]) {
     if (0 == port_name.compare(ports_[module_id][port].get_name())) {
       /* Find it, return the id */
+// //print port for debugging purposes
+      // VTR_LOG("Found port %s in module %s\n", port_name.c_str(),
+      //         module_name(module_id).c_str());  
+                
+      VTR_LOG("Top module port ID: %zu\n", size_t(port));
       return port;
     }
   }
   /* Not found, return an invalid id */
+  VTR_LOG("Port is INVALID\n");
   return ModulePortId::INVALID();
 }
 
