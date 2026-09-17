@@ -338,19 +338,18 @@ ModulePortId ModuleManager::find_module_port(
   VTR_ASSERT(valid_module_id(module_id));
 
   /* Iterate over the ports of the module */
-  for (const auto& port : port_ids_[module_id]) {
-    if (0 == port_name.compare(ports_[module_id][port].get_name())) {
-      /* Find it, return the id */
-// //print port for debugging purposes
-      // VTR_LOG("Found port %s in module %s\n", port_name.c_str(),
-      //         module_name(module_id).c_str());  
+  for (const auto& port : port_ids_[module_id]) { //vector of moduleportids 
+    if (0 == port_name.compare(ports_[module_id][port].get_name())) { //port is a key for the map to access it 
+      /* Find it, return the id */ 
                 
-      VTR_LOG("Top module port ID: %zu\n", size_t(port));
+     // VTR_LOG("Top module port ID: %s\n", ports_[module_id][port].get_name().c_str());
+    
       return port;
+      break;
     }
   }
   /* Not found, return an invalid id */
-  VTR_LOG("Port is INVALID\n");
+  //VTR_LOG("Port is INVALID\n");
   return ModulePortId::INVALID();
 }
 

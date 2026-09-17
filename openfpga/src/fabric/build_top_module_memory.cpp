@@ -449,7 +449,7 @@ void organize_top_module_memory_modules(
   const DeviceRRGSB& device_rr_gsb, const RRGraphView& rr_graph,
   const vtr::NdMatrix<size_t, 3>& sb_instance_ids,
   const std::map<t_rr_type, vtr::NdMatrix<size_t, 3>>& cb_instance_ids,
-  const bool& compact_routing_hierarchy) {
+  const bool& compact_routing_hierarchy, const size_t& layer) {
   /* Ensure clean vectors to return */
   // VTR_ASSERT(true ==
   //            module_manager
@@ -499,7 +499,8 @@ void organize_top_module_memory_modules(
     io_coords[LEFT].push_back(vtr::Point<size_t>(0, iy));
   }
 
-  for (size_t ilayer = 0; ilayer < (size_t)grids.get_num_layers(); ++ilayer){
+  // for (size_t ilayer = 0; ilayer < (size_t)grids.get_num_layers(); ++ilayer){
+  size_t ilayer = layer; /* TODO: Support multi-layer memory organization */
     for (const e_side& io_side : io_sides) {
       for (const vtr::Point<size_t>& io_coord : io_coords[io_side]) {
         /* Identify the GSB that surrounds the grid */
@@ -538,7 +539,7 @@ void organize_top_module_memory_modules(
         sb_instance_ids, cb_instance_ids, compact_routing_hierarchy, ilayer,
         core_coord, NUM_2D_SIDES);
     }
-  }
+  // }
 
   /* Split memory modules into different regions */
   build_top_module_configurable_regions(module_manager, top_module,

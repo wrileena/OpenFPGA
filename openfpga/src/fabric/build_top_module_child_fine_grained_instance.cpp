@@ -29,6 +29,9 @@
 #include "openfpga_reserved_words.h"
 #include "rr_gsb_utils.h"
 
+/*Header for vertical connection building*/
+#include "build_top_module_vertical_connection.h"
+
 /* begin namespace openfpga */
 namespace openfpga {
 
@@ -114,9 +117,12 @@ static vtr::NdMatrix<size_t, 3> add_top_module_grid_instances(
   std::map<e_side, std::vector<vtr::Point<size_t>>> io_coordinates =
     generate_perimeter_grid_coordinates(grids);
 
-  // for (size_t ilayer = 0; ilayer < (size_t)grids.get_num_layers(); ++ilayer) {
-    size_t ilayer =layer; 
-  
+  for (size_t ilayer = 0; ilayer < (size_t)grids.get_num_layers(); ++ilayer) {
+
+    if(layer !=-1)
+    {
+     ilayer =layer; 
+    }  
     for (const e_side& io_side : FPGA_SIDES_CLOCKWISE) {
       for (const vtr::Point<size_t>& io_coordinate : io_coordinates[io_side]) {
         t_physical_tile_loc phy_tile_loc(io_coordinate.x(), io_coordinate.y(),
@@ -152,6 +158,7 @@ static vtr::NdMatrix<size_t, 3> add_top_module_grid_instances(
           add_top_module_grid_instance(module_manager, top_module, phy_tile_type,
                                       io_side, io_coordinate, ilayer);
       }
+          VTR_LOG("[global_net_grid]   perimeter loop DONE\n");
     }
 
     /* Instanciate core grids
@@ -190,15 +197,20 @@ static vtr::NdMatrix<size_t, 3> add_top_module_grid_instances(
           module_manager, top_module, phy_tile_type, NUM_2D_SIDES, grid_coord, ilayer);
       }
     }
-  // }
+    if(layer !=-1)
+    {
+      break; 
+    }
+  }
+
 //Print the grid instance ids for debugging
   // for (size_t ilayer = 0; ilayer < (size_t)grids.get_num_layers(); ++ilayer) {
-    for (size_t ix = 0; ix < grids.width(); ++ix) {
-      for (size_t iy = 0; iy < grids.height(); ++iy) {
-        VTR_LOG("Grid instance at layer %lu, x %lu, y %lu: %lu\n", ilayer, ix, iy, grid_instance_ids[ilayer][ix][iy]);
-      }
-    // }
-  } 
+  //   for (size_t ix = 0; ix < grids.width(); ++ix) {
+  //     for (size_t iy = 0; iy < grids.height(); ++iy) {
+  //       VTR_LOG("Grid instance at layer %lu, x %lu, y %lu: %lu\n", ilayer, ix, iy, grid_instance_ids[ilayer][ix][iy]);
+  //     }
+  //   // }
+  // } 
   return grid_instance_ids;
   
 }
@@ -269,6 +281,7 @@ static vtr::NdMatrix<size_t, 3> add_top_module_switch_block_instances(
       for (size_t iy = 0; iy < sb_range.y(); ++iy) {
         VTR_LOG("Switch block instance at layer %lu, x %lu, y %lu: %lu\n", layer, ix, iy, sb_instance_ids[layer][ix][iy]);
       }
+      
     } 
   // }
 
@@ -293,14 +306,20 @@ static vtr::NdMatrix<size_t, 3> add_top_module_connection_block_instances(
   /* Reserve an array for the instance ids */
   vtr::NdMatrix<size_t, 3> cb_instance_ids({num_layers, cb_range.x(), cb_range.y()});
   cb_instance_ids.fill(size_t(-1));
-  // for (size_t ilayer = 0; ilayer < num_layers; ++ilayer) {
+
+  for (size_t ilayer = 0; ilayer < num_layers; ++ilayer) {
+
+   if(layer !=-1)
+    {
+     ilayer =layer; 
+    } 
     for (size_t ix = 0; ix < cb_range.x(); ++ix) {
       for (size_t iy = 0; iy < cb_range.y(); ++iy) {
         /* Check if the connection block exists in the device!
         * Some of them do NOT exist due to heterogeneous blocks (height > 1)
         * We will skip those modules
         */
-       size_t ilayer = layer ;
+      //  size_t ilayer = layer ;
         const RRGSB& rr_gsb = device_rr_gsb.get_gsb(ix, iy, ilayer);
         VTR_LOGV(verbose, "Try to add %s connnection block at (%lu,%lu, %lu)\n",
                 cb_type == CHANX ? "X-" : "Y-", ilayer, ix, iy);
@@ -349,7 +368,11 @@ static vtr::NdMatrix<size_t, 3> add_top_module_connection_block_instances(
                 cb_module_name.c_str());
       }
     }
-  // }
+     if(layer !=-1)
+    {
+      break; 
+    }
+  }
   //Print the connection block instance ids for debugging
   for (size_t ix = 0; ix < cb_range.x(); ++ix) {
       for (size_t iy = 0; iy < cb_range.y(); ++iy) {
@@ -530,10 +553,18 @@ int build_top_module_fine_grained_child_instances(
   /* Add all the grids across the fabric */
   vtr::NdMatrix<size_t, 3> grid_instance_ids =
     add_top_module_grid_instances(module_manager, top_module, grids, layer);
-  /* Add all the SBs across the fabric */
-  vtr::NdMatrix<size_t, 3> sb_instance_ids = add_top_module_switch_block_instances(
-    module_manager, top_module, rr_graph, device_rr_gsb,
-    compact_routing_hierarchy,layer);
+
+
+  // /* Add all the CBX and CBYs across the fabric */
+  // cb_instance_ids[CHANX] = add_top_module_connection_block_instances(
+  //   module_manager, top_module, device_rr_gsb, CHANX, compact_routing_hierarchy,
+  //   verbose, layer);
+  // cb_instance_ids[CHANY] = add_top_module_connection_block_instances(
+  //   module_manager, top_module, device_rr_gsb, CHANY, compact_routing_hierarchy,
+  //   verbose, layer);
+
+
+
   /* Add all the CBX and CBYs across the fabric */
   cb_instance_ids[CHANX] = add_top_module_connection_block_instances(
     module_manager, top_module, device_rr_gsb, CHANX, compact_routing_hierarchy,
@@ -541,6 +572,30 @@ int build_top_module_fine_grained_child_instances(
   cb_instance_ids[CHANY] = add_top_module_connection_block_instances(
     module_manager, top_module, device_rr_gsb, CHANY, compact_routing_hierarchy,
     verbose, layer);
+
+  /* NEW STEP 2: expose SB/CB interlayer signals as boundary ports on this
+   * layer_module. Note: top_module here is actually layer_module, passed
+   * in from the main loop — this call does NOT connect across layers,
+   * it only creates dangling ports on this one layer's module boundary. */
+
+  //debug
+
+  if (layer!=-1)
+  {
+    /* Add all the SBs across the fabric */
+  vtr::NdMatrix<size_t, 3> sb_instance_ids = add_top_module_switch_block_instances(
+    module_manager, top_module, rr_graph, device_rr_gsb,
+    compact_routing_hierarchy,layer);
+
+  VTR_LOG("Entering inter layer port module exposure for layer %lu\n", layer);
+  
+  add_layer_module_interlayer_ports(
+    module_manager, top_module, rr_graph, device_rr_gsb,
+    sb_instance_ids, cb_instance_ids, compact_routing_hierarchy, layer);
+
+    //add log line to indicate that the interlayer ports has been entered
+    VTR_LOG("Completed interlayer port exposure for layer %lu\n", layer);
+
 
   /* Update I/O children list */
   add_top_module_io_children(module_manager, top_module, grids,
@@ -575,30 +630,41 @@ int build_top_module_fine_grained_child_instances(
 
   /* Add global ports from grid ports that are defined as global in tile
    * annotation */
-  status = add_top_module_global_ports_from_grid_modules(
-    module_manager, top_module, tile_annotation, vpr_device_annotation, grids,
-    rr_graph, device_rr_gsb, cb_instance_ids, grid_instance_ids,
-    clk_ntwk, rr_clock_lookup, perimeter_cb, layer);
-  if (CMD_EXEC_FATAL_ERROR == status) {
-    return status;
-  }
+
+
+  // status = add_top_module_global_ports_from_grid_modules(
+  //   module_manager, top_module, tile_annotation, vpr_device_annotation, grids,
+  //   rr_graph, device_rr_gsb, cb_instance_ids, grid_instance_ids,
+  //   clk_ntwk, rr_clock_lookup, perimeter_cb, layer);
+  // if (CMD_EXEC_FATAL_ERROR == status) {
+  //     VTR_LOG("[global_net_grid] EXIT status=%d\n", status);
+  //   return status;
+  // }
 
   /* Add GPIO ports from the sub-modules under this Verilog module
    * For top-level module, we follow a special sequencing for I/O modules. So we
    * rebuild the I/O children list here
    */
-  add_module_gpio_ports_from_child_modules(module_manager, top_module);
 
+  // VTR_LOG("[fine_grained] about to call add_module_gpio_ports_from_child_modules\n");
+
+  // add_module_gpio_ports_from_child_modules(module_manager, top_module);
+  //  VTR_LOG("[fine_grained] returned from add_module_gpio_ports_from_child_modules\n");
   /* Organize the list of memory modules and instances
    * If we have an empty fabric key, we organize the memory modules as routine
    * Otherwise, we will load the fabric key directly
    */
   if (true == fabric_key.empty()) {
+    VTR_LOG("[fine_grained] about to call organize_top_module_memory_modules\n");
     organize_top_module_memory_modules(
       module_manager, top_module, circuit_lib, config_protocol, sram_model,
       grids, grid_instance_ids, device_rr_gsb, rr_graph, sb_instance_ids,
-      cb_instance_ids, compact_routing_hierarchy);
+      cb_instance_ids, compact_routing_hierarchy,layer);
+        VTR_LOG("[fine_grained] returned from organize_top_module_memory_modules\n");
   } else {
+
+    //
+    VTR_LOG("INSIDE ELSE");
     VTR_ASSERT_SAFE(false == fabric_key.empty());
     /* Throw a fatal error when the fabric key has a mismatch in region
      * organization. between architecture file and fabric key
@@ -610,6 +676,8 @@ int build_top_module_fine_grained_child_instances(
         fabric_key.regions().size(), config_protocol.num_regions());
       return CMD_EXEC_FATAL_ERROR;
     }
+
+
 
     status = load_top_module_memory_modules_from_fabric_key(
       module_manager, top_module, circuit_lib, config_protocol, fabric_key);
@@ -631,10 +699,29 @@ int build_top_module_fine_grained_child_instances(
       return status;
     }
   }
+  }
+  if(layer == -1)
+  {
+    status = add_top_module_global_ports_from_grid_modules(
+    module_manager, top_module, tile_annotation, vpr_device_annotation, grids,
+    rr_graph, device_rr_gsb, cb_instance_ids, grid_instance_ids,
+    clk_ntwk, rr_clock_lookup, perimeter_cb, layer);
+  if (CMD_EXEC_FATAL_ERROR == status) {
+      VTR_LOG("[global_net_grid] EXIT status=%d\n", status);
+    return status;
+
+    add_module_gpio_ports_from_child_modules(module_manager, top_module);
+   VTR_LOG("[fine_grained] returned from add_module_gpio_ports_from_child_modules\n");
+
+
+  }
+  }
   return CMD_EXEC_SUCCESS;
 }
 
 } /* end namespace openfpga */
+
+
 
 
 

@@ -35,6 +35,25 @@ namespace openfpga{
         const RRGraphView& rr_graph, const DeviceRRGSB& device_rr_gsb,
         const RRGSB& rr_gsb, const vtr::NdMatrix<size_t, 3>& cb_instance_ids,
         const bool& compact_routing_hierarchy, const size_t& layer, const t_rr_type& cb_type);
+     /* Exposes SB/CB interlayer signals as boundary ports on a layer_module.
+      * Call once per layer, from inside that layer's own build, while
+      * sb_instance_ids/cb_instance_ids for that layer are still in scope. */
+    void add_layer_module_interlayer_ports(
+        ModuleManager& module_manager, const ModuleId& layer_module,
+        const RRGraphView& rr_graph, const DeviceRRGSB& device_rr_gsb,
+        const vtr::NdMatrix<size_t, 3>& sb_instance_ids,
+        const std::map<t_rr_type, vtr::NdMatrix<size_t, 3>>& cb_instance_ids,
+        const bool& compact_routing_hierarchy, const size_t& layer);
+
+        /* Connects fpga_layer_i <-> fpga_layer_{i+1} at the true top module.
+        * Call only once, after ALL layer modules have been fully built. */
+    void add_top_module_nets_connect_layer_and_layer(
+        ModuleManager& module_manager, const ModuleId& top_module,
+        const DeviceRRGSB& device_rr_gsb,
+        const std::vector<ModuleId>& layer_module_ids,
+        const std::vector<size_t>& layer_instance_ids,
+        const size_t& num_layers);
+
 }
 
 #endif

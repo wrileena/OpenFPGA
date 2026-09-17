@@ -30,6 +30,10 @@
 #include "openfpga_naming.h"
 #include "openfpga_reserved_words.h"
 #include "rr_gsb_utils.h"
+
+#include "build_top_module_vertical_connection.h"
+
+
 #define VTR_ENABLE_DEBUG_LOGGING
 
 /* begin namespace openfpga */
@@ -90,6 +94,12 @@ int build_top_module(
 
   //To add more layers instead of just one
 
+    /* Track each layer_module's id and instance id for the interlayer pass below */
+  std::vector<ModuleId> layer_module_ids(grids.get_num_layers());
+  std::vector<size_t> layer_instance_ids(grids.get_num_layers());
+
+
+
   for (size_t layer = 0; layer < grids.get_num_layers(); ++layer) {
 
     std::string layer_module_name =
@@ -102,7 +112,11 @@ int build_top_module(
     VTR_LOG("Layer module '%s' with id '%d' is added to the TOP manager.\n",
             module_manager.module_name(layer_module).c_str(), size_t(layer_module));  
 
-    module_manager.add_child_module(top_module,layer_module,false);
+    // module_manager.add_child_module(top_module,layer_module,false);
+
+      
+  layer_module_ids[layer] = layer_module;
+
  // }
 
     if (fabric_tile.empty()) {
@@ -120,13 +134,62 @@ int build_top_module(
         rr_graph, device_rr_gsb, tile_direct, arch_direct, fabric_tile,
         config_protocol, sram_model, fabric_key, group_config_block,
         name_module_using_index, perimeter_cb, frame_view, verbose);
+        
       if (status != CMD_EXEC_SUCCESS) {
         return CMD_EXEC_FATAL_ERROR;
       }
+      
     }
+
+  layer_instance_ids[layer] =
+      module_manager.num_instance(top_module, layer_module);
+      module_manager.add_child_module(top_module, layer_module, false);
+      module_manager.set_child_instance_name(
+          top_module, layer_module, layer_instance_ids[layer], layer_module_name);
+
+
+  /* NEW STEP 4: connect fpga_layer_i <-> fpga_layer_{i+1} at the top module.
+  * This is the ONLY step that actually performs interlayer connection.
+  * Can only run now that ALL layer modules exist. */
+ 
+    }
+
+
+  size_t num_layers = device_rr_gsb.get_gsb_layers();
+
+  add_module_gpio_ports_from_child_modules(module_manager, top_module);
+
+  if (num_layers > 1) {
+    add_top_module_nets_connect_layer_and_layer(
+        module_manager, top_module, device_rr_gsb,
+        layer_module_ids, layer_instance_ids, num_layers);
   }
 
+//Call fine_grain_child_instances top level module 
+VTR_LOG("Started  building TOp module child instances\n");
 
+if (fabric_tile.empty()) {
+    status = build_top_module_fine_grained_child_instances(
+        module_manager, top_module, blwl_sr_banks, circuit_lib, clk_ntwk,
+        rr_clock_lookup, vpr_device_annotation, grids, tile_annotation,
+        rr_graph, device_rr_gsb, tile_direct, arch_direct, config_protocol,
+        sram_model, frame_view, compact_routing_hierarchy, duplicate_grid_pin,
+        fabric_key, group_config_block, perimeter_cb, verbose, -1);
+   } else {
+      /* Build the tile instances under the top module */
+      status = build_top_module_tile_child_instances(
+        module_manager, top_module, blwl_sr_banks, circuit_lib, clk_ntwk,
+        rr_clock_lookup, vpr_device_annotation, grids, -1, tile_annotation,
+        rr_graph, device_rr_gsb, tile_direct, arch_direct, fabric_tile,
+        config_protocol, sram_model, fabric_key, group_config_block,
+        name_module_using_index, perimeter_cb, frame_view, verbose);
+        
+      if (status != CMD_EXEC_SUCCESS) {
+        return CMD_EXEC_FATAL_ERROR;
+      }
+      
+    }
+VTR_LOG("Finished  building Top MOdule child instances\n");
 //Print the names of the modules 
   for (const ModuleId& module_id :module_manager.child_modules(top_module)) {
     VTR_LOG("Module '%s' with id '%d' is added to the module manager.\ntop_module",

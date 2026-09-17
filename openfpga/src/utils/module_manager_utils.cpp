@@ -2524,6 +2524,8 @@ void add_module_bus_nets(
   VTR_ASSERT(true == module_manager.valid_module_port_id(des_module_id,
                                                          des_module_port_id));
 
+VTR_LOG("All ids are correct in module manager\n");
+
   if (src_module_id == cur_module_id) {
     VTR_ASSERT(0 == src_instance_id);
   } else {
@@ -2538,19 +2540,23 @@ void add_module_bus_nets(
                module_manager.num_instance(cur_module_id, des_module_id));
   }
 
+
   const BasicPort& src_port =
     module_manager.module_port(src_module_id, src_module_port_id);
   const BasicPort& des_port =
     module_manager.module_port(des_module_id, des_module_port_id);
 
   if (src_port.get_width() != des_port.get_width()) {
-    VTR_LOGF_ERROR(
-      __FILE__, __LINE__,
-      "Unmatched port size: src_port %s is %lu while des_port %s is %lu!\n",
-      src_port.get_name().c_str(), src_port.get_width(),
-      des_port.get_name().c_str(), des_port.get_width());
-    exit(1);
+   VTR_LOG(
+  "Unmatched port size: src_port %s is %lu while des_port %s is %lu!\n",
+  src_port.get_name().c_str(), src_port.get_width(),
+  des_port.get_name().c_str(), des_port.get_width());
+exit(1);
   }
+
+  VTR_LOG("[add_module_bus_nets] src_port='%s' width=%zu, des_port='%s' width=%zu\n",
+        src_port.get_name().c_str(), src_port.get_width(),
+        des_port.get_name().c_str(), des_port.get_width());
 
   /* Create a net for each pin */
   for (size_t pin_id = 0; pin_id < src_port.pins().size(); ++pin_id) {
@@ -2558,6 +2564,8 @@ void add_module_bus_nets(
       module_manager, cur_module_id, src_module_id, src_instance_id,
       src_module_port_id, src_port.pins()[pin_id]);
     VTR_ASSERT(ModuleNetId::INVALID() != net);
+
+    VTR_LOG("Net for each pin has been created");
 
     /* Configure the net sink */
     module_manager.add_module_net_sink(cur_module_id, net, des_module_id,

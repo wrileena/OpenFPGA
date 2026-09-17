@@ -1127,31 +1127,31 @@ void add_top_module_nets_connect_grids_and_gsbs(
 
         // This has to be varied to change it to imterlayer connections between MODULES 
 
-        // if (num_layers > 1){
+      //   if (num_layers > 1){
 
-        //   VTR_LOG("Adding interlayer connections for layer %d at location (%d, %d)\n", ilayer, ix, iy);
+      //     VTR_LOG("Adding interlayer connections for layer %d at location (%d, %d)\n", layer, ix, iy);
 
-        //   add_top_module_nets_connect_sb_and_sb(module_manager, top_module, rr_graph, device_rr_gsb, rr_gsb,
-        //     sb_instance_ids, compact_routing_hierarchy, ilayer);
+      //    add_top_module_nets_connect_sb_and_sb(module_manager, top_module, rr_graph, device_rr_gsb, rr_gsb,
+      //       sb_instance_ids, compact_routing_hierarchy, layer);
 
-        //     //add debugging information
-        //     VTR_LOG("Completed sb to sb connections for layer %d at location (%d, %d)\n", ilayer, ix, iy);    
+      //       //add debugging information
+      //       VTR_LOG("Completed sb to sb connections for layer %d at location (%d, %d)\n", ilayer, ix, iy);    
 
-        //   // Connect CBs to CBs
-        //   add_top_module_nets_connect_cb_and_cb(module_manager, top_module, rr_graph, device_rr_gsb, rr_gsb,
-        //     cb_instance_ids.at(CHANX), compact_routing_hierarchy, ilayer, CHANX);
+      //     // Connect CBs to CBs
+      //     add_top_module_nets_connect_cb_and_cb(module_manager, top_module, rr_graph, device_rr_gsb, rr_gsb,
+      //       cb_instance_ids.at(CHANX), compact_routing_hierarchy, layer, CHANX);
           
-        //     //add debugging information
-        //     VTR_LOG("Completed cb to cb connections for layer %d at location (%d, %d)\n", ilayer, ix, iy);  
+      //       //add debugging information
+      //       VTR_LOG("Completed cb to cb connections for layer %d at location (%d, %d)\n", ilayer, ix, iy);  
 
-        //   add_top_module_nets_connect_cb_and_cb(module_manager, top_module, rr_graph, device_rr_gsb, rr_gsb,
-        //     cb_instance_ids.at(CHANY), compact_routing_hierarchy, ilayer, CHANY);
+      //     add_top_module_nets_connect_cb_and_cb(module_manager, top_module, rr_graph, device_rr_gsb, rr_gsb,
+      //       cb_instance_ids.at(CHANY), compact_routing_hierarchy, layer, CHANY);
 
-        //     //add debugging information
-        //     VTR_LOG("Completed cb to cb connections for layer %d at location (%d, %d)\n", ilayer, ix, iy);    
+      //       //add debugging information
+      //       VTR_LOG("Completed cb to cb connections for layer %d at location (%d, %d)\n", ilayer, ix, iy);    
 
-        // }
-      }
+      //   }
+       }
       //check if layer connections have been made, add debugging information
       VTR_LOG("Completed layer %d connections for GSBs at x=%d\n", ilayer, ix); 
     }
@@ -1314,6 +1314,10 @@ static int build_top_module_global_net_from_grid_modules(
   const bool& perimeter_cb) {
   int status = CMD_EXEC_SUCCESS;
 
+  VTR_LOG("[global_net_grid] ENTER tile_info count=%zu\n",
+          tile_annotation.global_port_tile_names(tile_global_port).size());
+
+
   std::map<e_side, std::vector<vtr::Point<size_t>>> io_coordinates =
     generate_perimeter_grid_coordinates(grids);
 
@@ -1321,6 +1325,9 @@ static int build_top_module_global_net_from_grid_modules(
        tile_info_id <
        tile_annotation.global_port_tile_names(tile_global_port).size();
        ++tile_info_id) {
+
+         VTR_LOG("[global_net_grid]   tile_info_id=%zu\n", tile_info_id);
+        
     std::string tile_name =
       tile_annotation.global_port_tile_names(tile_global_port)[tile_info_id];
     BasicPort tile_port =
@@ -1364,6 +1371,9 @@ static int build_top_module_global_net_from_grid_modules(
       return CMD_EXEC_FATAL_ERROR;
     }
 
+
+    VTR_LOG("[global_net_grid]   core grid loop: x[%zu..%zu) y[%zu..%zu)\n",
+            start_coord.x(), end_coord.x(), start_coord.y(), end_coord.y());
     /* Spot the port from child modules from core grids */
     for (size_t ix = start_coord.x(); ix < end_coord.x(); ++ix) {
       for (size_t iy = start_coord.y(); iy < end_coord.y(); ++iy) {
@@ -1391,12 +1401,18 @@ static int build_top_module_global_net_from_grid_modules(
           tile_global_port, tile_port, vpr_device_annotation, grids, layer,
           vtr::Point<size_t>(ix, iy), NUM_2D_SIDES, grid_instance_ids,
           perimeter_cb);
+
+
         if (CMD_EXEC_FATAL_ERROR == status) {
+
+          VTR_LOG("[global_net_grid]   FATAL at core (%zu,%zu)\n", ix, iy);
           return status;
         }
       }
     }
-
+        VTR_LOG("[global_net_grid]   core grid loop DONE\n");
+        
+        VTR_LOG("[global_net_grid]   perimeter loop starting\n");
     /* Walk through all the grids on the perimeter, which are I/O grids */
     for (const e_side& io_side : FPGA_SIDES_CLOCKWISE) {
       for (const vtr::Point<size_t>& io_coordinate : io_coordinates[io_side]) {
@@ -1589,9 +1605,15 @@ int add_top_module_global_ports_from_grid_modules(
 
   //add debugging information
   VTR_LOG("Completed adding global ports from grid modules for layer %d\n", layer); 
+
+  VTR_LOG("[global_nets] About to iterate global_ports(), count=%zu\n",
+        tile_annotation.global_ports().size());
+
   /* Add module nets */
   for (const TileGlobalPortId& tile_global_port :
-       tile_annotation.global_ports()) {
+       tile_annotation.global_ports()) {   
+        VTR_LOG("[global_nets] LOOP ENTER: port_name='%s'\n",
+          tile_annotation.global_port_name(tile_global_port).c_str());
     /* Must found one valid port! */
 
     VTR_LOG("Top module port ID outisde the func: %zu\n", size_t(module_manager.find_module_port(
@@ -1615,22 +1637,38 @@ int add_top_module_global_ports_from_grid_modules(
      */
     //Add debug statement 
     VTR_LOG("Adding global net for tile global port %s\n", tile_annotation.global_port_name(tile_global_port).c_str()); 
-  
-    if (tile_annotation.global_port_thru_dedicated_network(tile_global_port)) {
+
+    /* NEW */
+  bool thru_dedicated = tile_annotation.global_port_thru_dedicated_network(tile_global_port);
+  VTR_LOG("[global_nets]   thru_dedicated_network=%d, about to call %s\n",
+          thru_dedicated,
+          thru_dedicated ? "build_top_module_global_net_from_clock_arch_tree"
+                          : "build_top_module_global_net_from_grid_modules");
+
+    
+    if (thru_dedicated) {
       status = build_top_module_global_net_from_clock_arch_tree(
         module_manager, top_module, top_module_port, rr_graph, device_rr_gsb,
         cb_instance_ids, clk_ntwk,
         tile_annotation.global_port_clock_arch_tree_name(tile_global_port),
-        rr_clock_lookup, 0);
+        rr_clock_lookup, layer);
     } else {
       status = build_top_module_global_net_from_grid_modules(
         module_manager, top_module, top_module_port, tile_annotation,
-        tile_global_port, vpr_device_annotation, grids, 0,
+        tile_global_port, vpr_device_annotation, grids, layer,
         grid_instance_ids, perimeter_cb);
     }
+
+    /* NEW */
+    VTR_LOG("[global_nets] returned status=%d\n", status);
+
     if (status == CMD_EXEC_FATAL_ERROR) {
       return status;
     }
+
+    /* NEW */
+    VTR_LOG("[global_nets] LOOP EXIT: port_name='%s'\n",
+            tile_annotation.global_port_name(tile_global_port).c_str());
   }
 
   return status;
