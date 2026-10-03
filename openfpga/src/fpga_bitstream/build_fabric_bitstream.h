@@ -26,6 +26,8 @@ FabricBitstream build_fabric_dependent_bitstream(
   const CircuitLibrary& circuit_lib, const ConfigProtocol& config_protocol,
   const bool& verbose);
 
+  
+
 } /* end namespace openfpga */
 
 #endif

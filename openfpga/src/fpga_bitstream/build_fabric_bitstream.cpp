@@ -22,6 +22,69 @@
 /* begin namespace openfpga */
 namespace openfpga {
 
+
+/********************************************************************
+ * Helper: true if a module's name marks it as a "layer" grouping module
+ *******************************************************************/
+static bool is_layer_module(const ModuleManager& module_manager,
+                            const ModuleId& module) {
+  return module_manager.module_name(module).find("layer") != std::string::npos;
+}
+
+/* Forward declaration: defined further down in this file */
+  static void build_module_fabric_dependent_bitstream(
+  const ConfigProtocol& config_protocol, const CircuitLibrary& circuit_lib,
+  const BitstreamManager& bitstream_manager, const ConfigBlockId& top_block,
+  const ModuleManager& module_manager, const ModuleId& top_module,
+  FabricBitstream& fabric_bitstream, const bool& verbose);
+
+/********************************************************************
+ * Wrapper: if top_module has its own registered regions, build the
+ * fabric-dependent bitstream exactly as before. Otherwise (layered
+ * fabric case), top_module's real configurable content lives one level
+ * down inside each fpga_layer_N module -- treat each layer module as
+ * its own top module and merge their bitstreams/regions into the same
+ * fabric_bitstream.
+ *******************************************************************/
+  static void build_module_fabric_dependent_bitstream_dispatch(
+  const ConfigProtocol& config_protocol, const CircuitLibrary& circuit_lib,
+  const BitstreamManager& bitstream_manager, const ConfigBlockId& top_block,
+  const ModuleManager& module_manager, const ModuleId& top_module,
+  FabricBitstream& fabric_bitstream, const bool& verbose) {
+  bool top_has_regions = false;
+  for (const ConfigRegionId& cr : module_manager.regions(top_module)) {
+    if (!module_manager.region_configurable_children(top_module, cr).empty()) {
+      top_has_regions = true;
+      break;
+    }
+  }
+
+  if (top_has_regions) {
+    build_module_fabric_dependent_bitstream(
+      config_protocol, circuit_lib, bitstream_manager, top_block,
+      module_manager, top_module, fabric_bitstream, verbose);
+    return;
+  }
+
+  /* Layered case: layer modules are a ModuleManager-only grouping -- they
+   * do NOT get their own block in bitstream_manager (confirmed: neither
+   * build_grid_bitstream nor build_routing_bitstream ever creates a block
+   * named after a layer; grid/SB/CB blocks are added flat, directly under
+   * top_block). So we reuse the single real top_block for every layer,
+   * swapping in each layer module as the "top module" purely so the
+   * region-based configurable-children lookup activates for it. */
+  fabric_bitstream.reserve_bits(bitstream_manager.num_bits());
+
+  for (const ModuleId& child_module : module_manager.child_modules(top_module)) {
+    if (!is_layer_module(module_manager, child_module)) {
+      continue;
+    }
+    build_module_fabric_dependent_bitstream(
+      config_protocol, circuit_lib, bitstream_manager, top_block,
+      module_manager, child_module, fabric_bitstream, verbose);
+  }
+}
+
 /********************************************************************
  * This function aims to build a bitstream for configuration chain-like protocol
  * It will walk through all the configurable children under a module
@@ -752,7 +815,7 @@ static void build_module_fabric_dependent_bitstream(
    */
 
   /* Ensure our fabric bitstream is in the same size as device bistream */
-  VTR_ASSERT(bitstream_manager.num_bits() == fabric_bitstream.num_bits());
+  // VTR_ASSERT(bitstream_manager.num_bits() == fabric_bitstream.num_bits());
 }
 
 /********************************************************************
@@ -810,9 +873,11 @@ FabricBitstream build_fabric_dependent_bitstream(
   }
 
   /* Start build-up formally */
-  build_module_fabric_dependent_bitstream(
+    /* Start build-up formally */
+    build_module_fabric_dependent_bitstream_dispatch(
     config_protocol, circuit_lib, bitstream_manager, top_block, module_manager,
     top_module, fabric_bitstream, verbose);
+      VTR_ASSERT(bitstream_manager.num_bits() == fabric_bitstream.num_bits());
 
   VTR_LOGV(verbose, "Built %lu configuration bits for fabric\n",
            fabric_bitstream.num_bits());

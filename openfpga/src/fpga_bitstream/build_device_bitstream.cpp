@@ -5,6 +5,7 @@
  * and Look-Up Tables (LUTs) which locate in CLBs and global routing
  *architecture
  *******************************************************************/
+#include <algorithm>
 #include <vector>
 
 /* Headers from vtrutil library */
@@ -22,70 +23,200 @@
 namespace openfpga {
 
 /********************************************************************
- * Estimate the number of blocks to be added to the whole device bitstream
- * This function will recursively walk through the module graph
- * from the specified top module and count the number of configurable children
- * which are the blocks that will be added to the bitstream manager
+ * Helper: true if a module's name marks it as a "layer" grouping module
+ *******************************************************************/
+static bool is_layer_module(const ModuleManager& module_manager,
+                            const ModuleId& module) {
+  return module_manager.module_name(module).find("layer") != std::string::npos;
+}
+
+/********************************************************************
+ * Helper: true if a module has any configurable children.
+ * The top-level module organizes its children per configuration region,
+ * while every other module exposes them via the flat configurable_children
+ * list -- this hides that distinction from callers.
+ *******************************************************************/
+static bool module_has_configurable_children(
+  const ModuleManager& module_manager, const ModuleId& top_module,
+  const ModuleId& parent_module) {
+  if (parent_module == top_module) {
+    for (const ConfigRegionId& config_region :
+         module_manager.regions(parent_module)) {
+      if (!module_manager
+             .region_configurable_children(parent_module, config_region)
+             .empty()) {
+        return true;
+      }
+    }
+    return false;
+  }
+  return 0 != module_manager.num_configurable_children(
+                parent_module, ModuleManager::e_config_child_type::PHYSICAL);
+}
+
+/********************************************************************
+ * Helper: return a module's configurable children, using the region-based
+ * accessor for the top-level module and the flat accessor otherwise.
+ *******************************************************************/
+static std::vector<ModuleId> get_configurable_children(
+  const ModuleManager& module_manager, const ModuleId& top_module,
+  const ModuleId& parent_module) {
+  std::vector<ModuleId> children;
+  if (parent_module == top_module) {
+    for (const ConfigRegionId& config_region :
+         module_manager.regions(parent_module)) {
+      for (const ModuleId& child_module :
+           module_manager.region_configurable_children(parent_module,
+                                                        config_region)) {
+        children.push_back(child_module);
+      }
+    }
+  } else {
+    for (const ModuleId& child_module : module_manager.configurable_children(
+           parent_module, ModuleManager::e_config_child_type::PHYSICAL)) {
+      children.push_back(child_module);
+    }
+  }
+  return children;
+}
+
+/********************************************************************
+ * Estimate the number of blocks contributed by parent_module and
+ * everything under it. parent_module is treated as its own "top" for
+ * region lookups: the region-based accessor is only used when
+ * parent_module == top_module, so this same function can be reused to
+ * walk a layer module as if it were a top-level module in its own right.
  *******************************************************************/
 static size_t rec_estimate_device_bitstream_num_blocks(
-  const ModuleManager& module_manager, const ModuleId& top_module) {
-  size_t num_blocks = 0;
-
-  /* Those child modules which have no children are
-   * actually configurable memory elements
-   * We skip them in couting
-   */
-  if (0 == module_manager.num_configurable_children(
-             top_module, ModuleManager::e_config_child_type::PHYSICAL)) {
+  const ModuleManager& module_manager, const ModuleId& top_module,
+  const ModuleId& parent_module) {
+  if (!module_has_configurable_children(module_manager, top_module,
+                                        parent_module)) {
     return 0;
   }
+  size_t sum = 0;
+  for (const ModuleId& child_module :
+       get_configurable_children(module_manager, top_module, parent_module)) {
+    sum += rec_estimate_device_bitstream_num_blocks(module_manager,
+                                                     top_module, child_module);
+  }
+  return sum + 1;
+}
 
-  size_t num_configurable_children =
-    module_manager
-      .configurable_children(top_module,
-                             ModuleManager::e_config_child_type::PHYSICAL)
-      .size();
-  for (size_t ichild = 0; ichild < num_configurable_children; ++ichild) {
-    ModuleId child_module = module_manager.configurable_children(
-      top_module, ModuleManager::e_config_child_type::PHYSICAL)[ichild];
-    num_blocks +=
-      rec_estimate_device_bitstream_num_blocks(module_manager, child_module);
+/********************************************************************
+ * Sum the blocks contributed by a layer module's children WITHOUT
+ * counting the layer module itself as a block. The real bitstream
+ * builders never create a ConfigBlockId for the layer grouping -- they
+ * add grid/SB/CB blocks flat, directly under top_block -- so the layer
+ * module must not get a +1 of its own here.
+ *******************************************************************/
+static size_t sum_layer_module_children_num_blocks(
+  const ModuleManager& module_manager, const ModuleId& layer_module) {
+  if (!module_has_configurable_children(module_manager, layer_module,
+                                        layer_module)) {
+    return 0;
+  }
+  size_t sum = 0;
+  for (const ModuleId& child_module :
+       get_configurable_children(module_manager, layer_module, layer_module)) {
+    sum += rec_estimate_device_bitstream_num_blocks(module_manager,
+                                                     layer_module, child_module);
+  }
+  return sum;
+}
+
+/********************************************************************
+ * Top-level entry point for block estimation.
+ *
+ * fpga_top itself may have no regions/configurable children registered
+ * directly on it -- in the layered fabric case, its real configurable
+ * content lives one level down, inside each fpga_layer_N module, which
+ * is built as its own self-contained top-level-style module (with its
+ * own regions). We detect that case and sum each layer module's
+ * children directly into fpga_top's count, without counting the layer
+ * module itself as a block.
+ *******************************************************************/
+static size_t estimate_device_bitstream_num_blocks_from_top(
+  const ModuleManager& module_manager, const ModuleId& top_module) {
+  if (module_has_configurable_children(module_manager, top_module,
+                                       top_module)) {
+    /* top_module has its own registered configurable children --
+     * normal (non-layered) case */
+    return rec_estimate_device_bitstream_num_blocks(module_manager,
+                                                     top_module, top_module);
   }
 
-  /* Add the number of blocks at current level */
-  num_blocks++;
+  /* Layered case: top_module itself counts as 1 block, plus whatever
+   * is found under each layer module's children (the layer module
+   * itself is not counted as a block) */
+  size_t sum = 1;
+  for (const ModuleId& child_module : module_manager.child_modules(top_module)) {
+    if (is_layer_module(module_manager, child_module)) {
+      sum += sum_layer_module_children_num_blocks(module_manager, child_module);
+    }
+  }
+  return sum;
+}
 
-  return num_blocks;
+/********************************************************************
+ * Collect the predicted block names for diagnostics, mirroring the
+ * counting logic above exactly. Only used when counts mismatch.
+ *******************************************************************/
+static void rec_collect_estimated_block_names(
+  const ModuleManager& module_manager, const ModuleId& top_module,
+  const ModuleId& parent_module, std::vector<std::string>& names) {
+  if (!module_has_configurable_children(module_manager, top_module,
+                                        parent_module)) {
+    return;
+  }
+  for (const ModuleId& child_module :
+       get_configurable_children(module_manager, top_module, parent_module)) {
+    rec_collect_estimated_block_names(module_manager, top_module, child_module,
+                                      names);
+  }
+  names.push_back(module_manager.module_name(parent_module));
+}
+
+static void collect_estimated_block_names_from_top(
+  const ModuleManager& module_manager, const ModuleId& top_module,
+  std::vector<std::string>& names) {
+  if (module_has_configurable_children(module_manager, top_module,
+                                       top_module)) {
+    rec_collect_estimated_block_names(module_manager, top_module, top_module,
+                                      names);
+    return;
+  }
+  names.push_back(module_manager.module_name(top_module));
+  for (const ModuleId& child_module : module_manager.child_modules(top_module)) {
+    if (is_layer_module(module_manager, child_module)) {
+      if (!module_has_configurable_children(module_manager, child_module,
+                                            child_module)) {
+        continue;
+      }
+      for (const ModuleId& grandchild :
+           get_configurable_children(module_manager, child_module,
+                                     child_module)) {
+        rec_collect_estimated_block_names(module_manager, child_module,
+                                          grandchild, names);
+      }
+    }
+  }
 }
 
 /********************************************************************
  * Estimate the number of configuration bits to be added to the whole device
- *bitstream This function will recursively walk through the module graph from
- *the specified top module and count the number of leaf configurable children
- * which are the bits that will be added to the bitstream manager
+ * bitstream. Same top-vs-non-top structure as the blocks estimator above.
  *******************************************************************/
 static size_t rec_estimate_device_bitstream_num_bits(
   const ModuleManager& module_manager, const ModuleId& top_module,
   const ModuleId& parent_module, const ConfigProtocol& config_protocol) {
   size_t num_bits = 0;
 
-  /* If a child module has no configurable children, this is a leaf node
-   * We can count it in. Otherwise, we should go recursively.
-   */
-  if (0 == module_manager.num_configurable_children(
-             parent_module, ModuleManager::e_config_child_type::PHYSICAL)) {
+  if (!module_has_configurable_children(module_manager, top_module,
+                                        parent_module)) {
     return 1;
   }
 
-  /* Two cases to walk through configurable children:
-   * - For top-level module:
-   *   Iterate over the multiple regions and visit each configuration child
-   * under any region In each region, frame-based configuration protocol or
-   * memory bank protocol will contain decoders. We should bypass them when
-   * count the bitstream size
-   * - For other modules:
-   *   Iterate over the configurable children regardless of regions
-   */
   if (parent_module == top_module) {
     for (const ConfigRegionId& config_region :
          module_manager.regions(parent_module)) {
@@ -98,7 +229,6 @@ static size_t rec_estimate_device_bitstream_num_bits(
           config_protocol, curr_region_num_config_child);
       curr_region_num_config_child -= num_child_to_skip;
 
-      /* Visit all the children in a recursively way */
       for (size_t ichild = 0; ichild < curr_region_num_config_child; ++ichild) {
         ModuleId child_module = module_manager.region_configurable_children(
           parent_module, config_region)[ichild];
@@ -107,8 +237,6 @@ static size_t rec_estimate_device_bitstream_num_bits(
       }
     }
   } else {
-    VTR_ASSERT_SAFE(parent_module != top_module);
-
     size_t num_configurable_children =
       module_manager
         .configurable_children(parent_module,
@@ -132,6 +260,40 @@ static size_t rec_estimate_device_bitstream_num_bits(
   }
 
   return num_bits;
+}
+
+static size_t sum_layer_module_children_num_bits(
+  const ModuleManager& module_manager, const ModuleId& layer_module,
+  const ConfigProtocol& config_protocol) {
+  return rec_estimate_device_bitstream_num_bits(
+    module_manager, layer_module, layer_module, config_protocol);
+}
+
+/********************************************************************
+ * Top-level entry point for bit estimation. Mirrors
+ * estimate_device_bitstream_num_blocks_from_top()'s layered-vs-normal
+ * handling. Note bits are NOT affected by the layer-module double-count
+ * issue (a module with no configurable children already contributes
+ * exactly 1 bit via the leaf case), so each layer module's bit count is
+ * simply summed in directly.
+ *******************************************************************/
+static size_t estimate_device_bitstream_num_bits_from_top(
+  const ModuleManager& module_manager, const ModuleId& top_module,
+  const ConfigProtocol& config_protocol) {
+  if (module_has_configurable_children(module_manager, top_module,
+                                       top_module)) {
+    return rec_estimate_device_bitstream_num_bits(
+      module_manager, top_module, top_module, config_protocol);
+  }
+
+  size_t sum = 0;
+  for (const ModuleId& child_module : module_manager.child_modules(top_module)) {
+    if (is_layer_module(module_manager, child_module)) {
+      sum += sum_layer_module_children_num_bits(module_manager, child_module,
+                                                 config_protocol);
+    }
+  }
+  return sum;
 }
 
 /********************************************************************
@@ -189,16 +351,15 @@ BitstreamManager build_device_bitstream(const VprContext& vpr_ctx,
   }
 
   /* Estimate the number of blocks to be added to the database */
-  num_blocks_to_reserve += rec_estimate_device_bitstream_num_blocks(
+  num_blocks_to_reserve += estimate_device_bitstream_num_blocks_from_top(
     openfpga_ctx.module_graph(), top_module);
   bitstream_manager.reserve_blocks(num_blocks_to_reserve);
   VTR_LOGV(verbose, "Reserved %lu configurable blocks\n",
            num_blocks_to_reserve);
 
   /* Estimate the number of bits to be added to the database */
-  size_t num_bits_to_reserve = rec_estimate_device_bitstream_num_bits(
-    openfpga_ctx.module_graph(), top_module, top_module,
-    openfpga_ctx.arch().config_protocol);
+  size_t num_bits_to_reserve = estimate_device_bitstream_num_bits_from_top(
+    openfpga_ctx.module_graph(), top_module, openfpga_ctx.arch().config_protocol);
   bitstream_manager.reserve_bits(num_bits_to_reserve);
   VTR_LOGV(verbose, "Reserved %lu configuration bits\n", num_bits_to_reserve);
 
@@ -235,6 +396,45 @@ BitstreamManager build_device_bitstream(const VprContext& vpr_ctx,
 
   VTR_LOGV(verbose, "Decoded %lu configuration bits into %lu blocks\n",
            bitstream_manager.num_bits(), bitstream_manager.num_blocks());
+
+  /* Diagnostic: only runs if the counts actually mismatch, so it costs
+   * nothing when everything is correct. If this still fires, it prints
+   * the exact block names that differ between prediction and reality. */
+  if (num_blocks_to_reserve != bitstream_manager.num_blocks()) {
+    std::vector<std::string> estimated_names;
+    collect_estimated_block_names_from_top(openfpga_ctx.module_graph(),
+                                           top_module, estimated_names);
+    estimated_names.push_back(bitstream_manager.block_name(top_block));
+
+    std::vector<std::string> actual_names;
+    for (const ConfigBlockId& blk : bitstream_manager.blocks()) {
+      actual_names.push_back(bitstream_manager.block_name(blk));
+    }
+
+    std::sort(estimated_names.begin(), estimated_names.end());
+    std::sort(actual_names.begin(), actual_names.end());
+
+    std::vector<std::string> only_in_estimate, only_in_actual;
+    std::set_difference(estimated_names.begin(), estimated_names.end(),
+                        actual_names.begin(), actual_names.end(),
+                        std::back_inserter(only_in_estimate));
+    std::set_difference(actual_names.begin(), actual_names.end(),
+                        estimated_names.begin(), estimated_names.end(),
+                        std::back_inserter(only_in_actual));
+
+    VTR_LOG_ERROR("Block count mismatch: estimated=%zu actual=%zu\n",
+                  num_blocks_to_reserve, bitstream_manager.num_blocks());
+    VTR_LOG("---- Predicted but NOT actually built (%zu) ----\n",
+            only_in_estimate.size());
+    for (const std::string& n : only_in_estimate) {
+      VTR_LOG("  estimator-only: %s\n", n.c_str());
+    }
+    VTR_LOG("---- Actually built but NOT predicted (%zu) ----\n",
+            only_in_actual.size());
+    for (const std::string& n : only_in_actual) {
+      VTR_LOG("  actual-only: %s\n", n.c_str());
+    }
+  }
 
   VTR_ASSERT(num_blocks_to_reserve == bitstream_manager.num_blocks());
   VTR_ASSERT(num_bits_to_reserve == bitstream_manager.num_bits());

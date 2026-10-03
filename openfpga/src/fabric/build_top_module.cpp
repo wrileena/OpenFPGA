@@ -157,6 +157,8 @@ int build_top_module(
 
   size_t num_layers = device_rr_gsb.get_gsb_layers();
 
+
+
   add_module_gpio_ports_from_child_modules(module_manager, top_module);
 
   if (num_layers > 1) {
@@ -281,7 +283,7 @@ VTR_LOG("Finished  building Top MOdule child instances\n");
    */
   add_module_global_ports_from_child_modules(module_manager, top_module,
                                              global_port_blacklist);
-
+    VTR_LOG("Finished building top module\n");
   return status;
 }
 
